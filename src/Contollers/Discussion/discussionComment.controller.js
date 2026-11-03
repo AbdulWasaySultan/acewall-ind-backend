@@ -1,0 +1,234 @@
+import Discussion from "../../Models/discussion.model.js";
+import DiscussionComment from "../../Models/discussionComment.model.js";
+import User from "../../Models/user.model.js";
+import { updateGradebookOnSubmission } from "../../Utiles/updateGradebookOnSubmission.js";
+import {
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../../Utiles/errors.js";
+import { asyncHandler } from "../../middlewares/errorHandler.middleware.js";
+import { notifyDiscussionComment, notifyDiscussionGraded } from "../../Utiles/notificationService.js";
+
+export const getDiscussionComments = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { page = 1, limit = 5 } = req.query; // Default to page 1, 5 comments per page
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const discussionComments = await DiscussionComment.find({
+    discussion: id,
+  })
+    .populate("createdby", "profileImg firstName middleName lastName role")
+    .sort({ createdAt: -1 }) // Most recent first
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const totalComments = await DiscussionComment.countDocuments({
+    discussion: id,
+  });
+
+  return res.status(200).json({
+    discussionComments,
+    totalPages: Math.ceil(totalComments / limit),
+    currentPage: parseInt(page),
+    message: "Comments fetched successfully"
+  });
+});
+
+export const sendDiscussionComment = asyncHandler(async (req, res) => {
+  const user = req.user;
+  const { text } = req.body;
+  const { id } = req.params;
+
+  const existingComments = await DiscussionComment.find({
+    createdby: user._id,
+    discussion: id,
+  });
+
+  const discussion = await Discussion.findById(id).populate('createdby', 'firstName lastName role');
+
+  // Check comment limits for students
+  if (user.role !== "teacher") {
+    if (!discussion.allowResubmission && existingComments.length >= 1) {
+      throw new ConflictError("You have already commented on this discussion", "DCOM_001");
+    }
+    // If resubmission is allowed, student can comment unlimited times
+  }
+
+  const dueDate = new Date(discussion.dueDate.date)
+    .toISOString()
+    .split("T")[0];
+  const dueTime = discussion.dueDate.time;
+  const dueDateTime = new Date(`${dueDate}T${dueTime}`);
+  const now = new Date();
+
+  const override = discussion.studentDueDateOverrides.find(
+    o => o.student.toString() === user._id
+  );
+
+  let finalDueDate = dueDateTime;
+
+  if (override) {
+    if (override.newDueDate) {
+      // Logic to handle override date/time same as base due date
+      const overDate = new Date(override.newDueDate.date).toISOString().split("T")[0];
+      const overTime = override.newDueDate.time;
+      finalDueDate = new Date(`${overDate}T${overTime}`);
+    }
+  }
+
+  let status = "before due date";
+  if (now > finalDueDate) {
+    status = "after due date";
+  }
+
+  const newDiscussionComment = new DiscussionComment({
+    text,
+    role: user.role,
+    createdby: user._id,
+    status,
+    discussion: id,
+    allowResubmission: discussion.allowResubmission,
+  });
+  await newDiscussionComment.save();
+
+  // Send notification to discussion author
+  try {
+    if (discussion && discussion.createdby) {
+      const commenterName = `${user.firstName} ${user.lastName}`;
+      await notifyDiscussionComment(
+        id,
+        discussion.topic,
+        discussion.createdby._id,
+        commenterName,
+        user._id,
+        discussion.createdby.role
+      );
+    }
+  } catch (error) {
+    console.error("Discussion comment notification error:", error.message);
+  }
+
+  return res.status(200).json({
+    newDiscussionComment,
+    message: "Comment sent successfully"
+  });
+});
+
+export const deleteComment = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const Comment = await DiscussionComment.findByIdAndDelete(id);
+
+  if (!Comment) {
+    throw new NotFoundError("Comment not found", "DCOM_002");
+  }
+  return res.status(200).json({
+    message: "Comment deleted successfully"
+  });
+});
+
+export const gradeDiscussionofStd = asyncHandler(async (req, res) => {
+  const { discID, discussionCommentId } = req.params;
+  const { obtainedMarks } = req.body;
+
+  const discussion = await Discussion.findById(discID);
+  if (!discussion) {
+    throw new NotFoundError("Discussion not found", "DCOM_003");
+  }
+
+  const discussionComment = await DiscussionComment.findById(discussionCommentId);
+
+  if (!discussionComment) {
+    throw new NotFoundError("Discussion comment not found", "DCOM_004");
+  }
+
+  // Step 1: Get the student who made the comment
+  const studentId = discussionComment.createdby;
+
+  // Step 2: Check if any of this student's comments in this discussion are already graded
+  const alreadyGraded = await DiscussionComment.findOne({
+    discussion: discID,
+    createdby: studentId,
+    isGraded: true,
+  });
+
+  if (!discussion.allowResubmission) {
+    if (alreadyGraded) {
+      throw new ConflictError(
+        "This student has already been graded for this discussion.",
+        "DCOM_005"
+      );
+    }
+  }
+
+  // Step 3: Grade the comment
+  discussionComment.gradedBy = req.user._id;
+  discussionComment.marksObtained = obtainedMarks;
+  discussionComment.isGraded = true;
+
+  await discussionComment.save();
+
+  await updateGradebookOnSubmission(
+    studentId,
+    discussion.course,     // courseId
+    discID,                // itemId
+    "discussion"           // type
+  );
+
+  try {
+    await notifyDiscussionGraded(
+      studentId,
+      discussion._id,
+      discussion.topic,
+      obtainedMarks,
+      discussion.totalMarks,
+      req.user._id
+    );
+  } catch (error) {
+    console.error("Discussion grading notification error:", error.message);
+  }
+
+  return res.status(200).json({
+    message: "Marks graded successfully"
+  });
+});
+
+export const isCommentedInDiscussion = asyncHandler(async (req, res) => {
+  const user = req.user;
+  const { id } = req.params;
+
+  const existingComments = await DiscussionComment.find({
+    createdby: user._id,
+    discussion: id,
+  });
+
+  const discussion = await Discussion.findById(id);
+
+  // For teachers, always return false (they can always comment)
+  if (user.role === "teacher") {
+    return res.status(200).json({
+      commented: false,
+      canComment: true,
+      message: "Teacher can always comment"
+    });
+  }
+
+  // For students, check comment limits based on resubmission setting
+  if (!discussion.allowResubmission && existingComments.length >= 1) {
+    return res.status(200).json({
+      commented: true,
+      canComment: false,
+      message: "Student has already commented and resubmission is not allowed"
+    });
+  }
+
+  // If resubmission is allowed, student can comment unlimited times
+  // Student can still comment
+  return res.status(200).json({
+    commented: existingComments.length > 0,
+    canComment: true,
+    message: existingComments.length > 0 ? "Student can still comment (resubmission allowed)" : "Student has not commented yet"
+  });
+});

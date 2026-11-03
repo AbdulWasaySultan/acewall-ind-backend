@@ -1,0 +1,1411 @@
+// src/Controllers/stripe.controller.js
+
+import stripe from "../config/stripe.js";
+import CourseSch from "../Models/courses.model.sch.js";
+import Enrollment from "../Models/Enrollement.model.js";
+import Purchase from "../Models/purchase.model.js"; // Assuming you have this model
+import User from "../Models/user.model.js";
+import {
+  notifyEnrollmentSuccess,
+  notifyReferralPointsUpdated,
+} from "../Utiles/notificationService.js";
+import { createTransporter } from "../Utiles/nodemailer.tranporter.js";
+import { baseEmailTemplate } from "../Utiles/emailTemplete.js";
+
+const transporter = createTransporter();
+
+export const stripeOnboarding = async (req, res) => {
+  try {
+    const teacher = req.user;
+
+    const teacherAcc = await User.findById(teacher._id);
+
+    if (!teacherAcc.stripeAccountId) {
+      return res
+        .status(400)
+        .json({ error: "No Stripe account ID found for this user." });
+    }
+
+    const link = await stripe.accountLinks.create({
+      account: teacherAcc.stripeAccountId,
+      refresh_url: `${process.env.CLIENT_URL}/teacher/onboarding-failed`,
+      return_url: `${process.env.CLIENT_URL}/teacher/onboarding-success`,
+      type: "account_onboarding",
+    });
+
+    res.json({ url: link.url });
+  } catch (error) {
+    console.error("Error in stripeOnboarding:", error);
+    res.status(500).json({
+      error: "Failed to create onboarding link",
+      details: error.message,
+    });
+  }
+};
+
+export const checkOnboarding = async (req, res) => {
+  try {
+    const teacher = req.user;
+    const { stripeAccountId } = req.body;
+
+    if (!teacher.stripeAccountId && !stripeAccountId) {
+      return res.json({
+        onboarded: false,
+        reason: "Stripe account not created",
+      });
+    }
+
+    const account = await stripe.accounts.retrieve(
+      teacher.stripeAccountId || stripeAccountId
+    );
+
+    return res.json({
+      onboarded: account.payouts_enabled,
+      stripeId: account.id,
+      chargesEnabled: account.charges_enabled,
+      detailsSubmitted: account.details_submitted,
+    });
+  } catch (error) {
+    console.error("Stripe onboarding check error:", error);
+
+    return res.status(400).json({
+      error: "Stripe account access error",
+      hint: "Account not owned by this platform or key mismatch",
+    });
+  }
+};
+
+export const getStripeLoginLink = async (req, res) => {
+  try {
+    const teacher = req.user;
+
+    if (!teacher.stripeAccountId) {
+      return res.status(400).json({
+        error: "Stripe account not connected",
+      });
+    }
+
+    const link = await stripe.accounts.createLoginLink(teacher.stripeAccountId);
+
+    res.json({ url: link.url });
+  } catch (err) {
+    res.status(500).json({ error: "Unable to create login link" });
+  }
+};
+
+export const createAccount = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      throw new ValidationError("Email is required.", "VAL_001");
+    }
+
+    const user = await User.findOne({ email });
+
+    const account = await stripe.accounts.create({
+      type: "express",
+      email: email,
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      business_type: "individual",
+      business_profile: {
+        url: "https://acewallscholarslearningonline.org",
+        product_description:
+          "Online courses and live classes sold via LMS platform",
+      },
+    });
+
+    user.stripeAccountId = account.id;
+    await user.save();
+    res.json({ account, message: "Stripe account created successfully" });
+  } catch (error) {
+    console.log(error, "error in create account");
+    res.status(500).json({
+      error: "Failed to create Stripe account",
+      details: error.message,
+    });
+  }
+};
+
+export const createCheckoutSessionConnect = async (req, res) => {
+  const { courseId, studentId, refCode = null } = req.body;
+
+  try {
+    const course = await CourseSch.findById(courseId).populate("createdby");
+    if (!course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
+
+    const alreadyEnrolled = await Enrollment.findOne({
+      student: studentId,
+      course: courseId,
+    });
+
+    if (alreadyEnrolled && alreadyEnrolled.status !== "CANCELLED") {
+      return res.status(400).json({ error: "Already enrolled in this course" });
+    }
+
+    const user = course.createdby;
+
+    const teacher = await User.findById(user);
+    const student = await User.findById(studentId);
+
+    const subscriptionData = {
+      application_fee_percent: 20,
+      transfer_data: {
+        destination: teacher.stripeAccountId,
+      },
+    };
+
+    const trialDays = course.freeTrialMonths;
+
+    if (!alreadyEnrolled || alreadyEnrolled.status !== "CANCELLED") {
+      if (trialDays > 0) {
+        subscriptionData.trial_period_days = trialDays * 30;
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: "Teacher not found" });
+    }
+
+    if (!teacher.stripeAccountId) {
+      return res.status(400).json({
+        neetsOnboarding: true,
+        error: "Teacher payout not enabled",
+      });
+    }
+
+    console.log("teacher log for", teacher);
+
+    // FREE COURSE
+    if (course.paymentType === "FREE") {
+      const freeEnrollment = await Enrollment.create({
+        student: studentId,
+        course: courseId,
+        status: "ACTIVE",
+        enrollmentType: "FREE",
+      });
+
+      try {
+        await transporter.sendMail({
+          from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+          to: teacher.email,
+          subject: "New Enrollment",
+          html: baseEmailTemplate({
+            title: "New Enrollment",
+            content: `
+        <p>Hello ${teacher.firstName},</p>
+        <p>You have a new enrollment in your course "<strong>${course.courseTitle}</strong>".</p>
+      `,
+          }),
+        });
+
+        await transporter.sendMail({
+          from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+          to: student.email,
+          subject: "Enrollment Confirmation",
+          html: baseEmailTemplate({
+            title: "Enrollment Confirmation",
+            content: `<p>Dear ${student.firstName},</p>
+              <p>You have been enrolled in the course "${course.courseTitle}".</p>
+              <p>Best regards,<br>Learning Vault by Acewall Scholars</p>`,
+          }),
+        });
+      } catch (error) {
+        console.error("❌ Error sending email:", error.message);
+      }
+
+      // Send enrollment success notification
+      await notifyEnrollmentSuccess(
+        studentId,
+        freeEnrollment._id,
+        course.courseTitle
+      );
+
+      return res.json({ success: true, free: true });
+    }
+
+    const amount = course.price * 100; // cents
+    const platformFee = Math.round(amount * 0.2); // 20%
+
+    // ONE-TIME PAYMENT
+    if (course.paymentType === "ONETIME") {
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        allow_promotion_codes: true,
+        customer_creation: "always",
+
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: course.courseTitle,
+                description: course.courseDescription,
+              },
+              unit_amount: course.price * 100,
+            },
+            quantity: 1,
+          },
+        ],
+
+        payment_intent_data: {
+          application_fee_amount: platformFee,
+          transfer_data: {
+            destination: teacher.stripeAccountId,
+          },
+        },
+
+        metadata: {
+          courseId,
+          studentId,
+          refCode,
+          teacherId: teacher._id.toString(),
+          paymentType: "ONETIME",
+        },
+
+        success_url: `${process.env.CLIENT_URL}/student/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_URL}/student/payment-cancelled`,
+      });
+
+      return res.json({ success: true, url: session.url });
+    }
+
+    // SUBSCRIPTION
+    if (course.paymentType === "SUBSCRIPTION") {
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        allow_promotion_codes: true,
+
+        line_items: [
+          {
+            price: course.stripePriceId,
+            quantity: 1,
+          },
+        ],
+
+        subscription_data: subscriptionData,
+
+        metadata: {
+          courseId,
+          studentId,
+          refCode,
+          teacherId: teacher._id.toString(),
+          paymentType: "SUBSCRIPTION",
+        },
+
+        success_url: `${process.env.CLIENT_URL}/student/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_URL}/student/payment-cancelled`,
+      });
+
+      return res.json({ success: true, url: session.url });
+    }
+  } catch (err) {
+    console.error("Stripe Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const createCheckoutSessionConnectMobile = async (req, res) => {
+  const { courseId, studentId, refCode = null } = req.body;
+
+  console.log("req.user====", req.user);
+
+  try {
+    const course = await CourseSch.findById(courseId).populate("createdby");
+    if (!course) {
+      return res.status(404).json({ error: "Course not found" });
+    }
+
+    const alreadyEnrolled = await Enrollment.findOne({
+      student: studentId,
+      course: courseId,
+    });
+
+    if (alreadyEnrolled && alreadyEnrolled.status !== "CANCELLED") {
+      return res.status(400).json({ error: "Already enrolled in this course" });
+    }
+
+    const user = course.createdby;
+
+    const teacher = await User.findById(user);
+    const student = await User.findById(studentId);
+
+    const subscriptionData = {
+      application_fee_percent: 20,
+      transfer_data: {
+        destination: teacher.stripeAccountId,
+      },
+    };
+
+    const trialDays = course.freeTrialMonths;
+
+    if (!alreadyEnrolled || alreadyEnrolled.status !== "CANCELLED") {
+      if (trialDays > 0) {
+        subscriptionData.trial_period_days = trialDays * 30;
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: "Teacher not found" });
+    }
+
+    if (!teacher.stripeAccountId) {
+      return res.status(400).json({
+        neetsOnboarding: true,
+        error: "Teacher payout not enabled",
+      });
+    }
+
+    // FREE COURSE
+    if (course.paymentType === "FREE") {
+      const freeEnrollment = await Enrollment.create({
+        student: studentId,
+        course: courseId,
+        status: "ACTIVE",
+        enrollmentType: "FREE",
+      });
+
+      try {
+        await transporter.sendMail({
+          from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+          to: teacher.email,
+          subject: "New Enrollment",
+          html: baseEmailTemplate({
+            title: "New Enrollment",
+            content: `
+        <p>Hello ${teacher.firstName},</p>
+        <p>You have a new enrollment in your course "<strong>${course.courseTitle}</strong>".</p>
+      `,
+          }),
+        });
+
+        await transporter.sendMail({
+          from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+          to: student.email,
+          subject: "Enrollment Confirmation",
+          html: baseEmailTemplate({
+            title: "Enrollment Confirmation",
+            content: `<p>Dear ${student.firstName},</p>
+              <p>You have been enrolled in the course "${course.courseTitle}".</p>
+              <p>Best regards,<br>Learning Vault by Acewall Scholars</p>`,
+          }),
+        });
+      } catch (error) {
+        console.error("❌ Error sending email:", error.message);
+      }
+
+      // Send enrollment success notification
+      await notifyEnrollmentSuccess(
+        studentId,
+        freeEnrollment._id,
+        course.courseTitle
+      );
+
+      return res.json({ success: true, free: true });
+    }
+
+    const amount = course.price * 100; // cents
+    const platformFee = Math.round(amount * 0.2); // 20%
+
+    const appScheme = process.env.MOBILE_APP_SCHEME || "acewallapp";
+    const success_url = `${appScheme}://payment-success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancel_url = `${appScheme}://payment-cancelled`;
+
+    // ONE-TIME PAYMENT
+    if (course.paymentType === "ONETIME") {
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        allow_promotion_codes: true,
+        customer_creation: "always",
+
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: course.courseTitle,
+                description: course.courseDescription,
+              },
+              unit_amount: course.price * 100,
+            },
+            quantity: 1,
+          },
+        ],
+
+        payment_intent_data: {
+          application_fee_amount: platformFee,
+          transfer_data: {
+            destination: teacher.stripeAccountId,
+          },
+        },
+
+        metadata: {
+          courseId,
+          studentId,
+          refCode,
+          teacherId: teacher._id.toString(),
+          paymentType: "ONETIME",
+          source: "mobile",
+        },
+
+        success_url,
+        cancel_url,
+      });
+
+      return res.json({ success: true, url: session.url });
+    }
+
+    // SUBSCRIPTION
+    if (course.paymentType === "SUBSCRIPTION") {
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        allow_promotion_codes: true,
+
+        line_items: [
+          {
+            price: course.stripePriceId,
+            quantity: 1,
+          },
+        ],
+
+        subscription_data: subscriptionData,
+
+        metadata: {
+          courseId,
+          studentId,
+          refCode,
+          teacherId: teacher._id.toString(),
+          paymentType: "SUBSCRIPTION",
+          source: "mobile",
+        },
+
+        success_url,
+        cancel_url,
+      });
+
+      return res.json({ success: true, url: session.url });
+    }
+  } catch (err) {
+    console.error("Mobile Stripe Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const handleStripeWebhookConnect = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("❌ Webhook signature verification failed:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      /**
+       * ================================
+       * CHECKOUT COMPLETED
+       * ================================
+       */
+      case "checkout.session.completed": {
+        const session = event.data.object;
+
+        const { courseId, studentId, teacherId, paymentType, refCode } =
+          session.metadata || {};
+
+        const userByRefCode = await User.findOne({ referralCode: refCode });
+
+        if (!courseId || !studentId) {
+          console.log("⚠️ Missing courseId or studentId in session metadata");
+          break;
+        }
+
+        const course = await CourseSch.findById(courseId);
+        const teacher = await User.findById(teacherId);
+        const student = await User.findById(studentId);
+
+        let purchase = await Purchase.findOne({ stripeSessionId: session.id });
+
+        // ================================
+        // ONLY CREATE MANUAL INVOICE FOR ONE-TIME PAYMENTS
+        // ================================
+        let manualInvoiceId = null;
+
+        if (paymentType === "ONETIME") {
+          // Create invoice item
+          await stripe.invoiceItems.create({
+            customer: session.customer,
+            amount: session.amount_total,
+            currency: session.currency,
+            description: `Course purchase: ${courseId}`,
+            metadata: {
+              courseId,
+              studentId,
+              teacherId,
+              paymentType: paymentType,
+            },
+          });
+
+          // Create and finalize invoice
+          const invoice = await stripe.invoices.create({
+            customer: session.customer,
+            auto_advance: true,
+            metadata: {
+              courseId,
+              studentId,
+              teacherId,
+              paymentType: paymentType,
+            },
+          });
+
+          await stripe.invoices.finalizeInvoice(invoice.id);
+          manualInvoiceId = invoice.id;
+        }
+
+        // ================================
+        // GET RECEIPT URL - HANDLES BOTH PAYMENT TYPES
+        // ================================
+        let receiptUrl = null;
+        let subscriptionInvoiceId = null;
+        let invoicePdf = null;
+        let status = null;
+
+        if (paymentType === "ONETIME" && session.payment_intent) {
+          try {
+            status = "paid";
+            const paymentIntent = await stripe.paymentIntents.retrieve(
+              session.payment_intent,
+              { expand: ["latest_charge"] }
+            );
+
+            if (paymentIntent.latest_charge) {
+              const charge =
+                typeof paymentIntent.latest_charge === "string"
+                  ? await stripe.charges.retrieve(paymentIntent.latest_charge)
+                  : paymentIntent.latest_charge;
+
+              receiptUrl = charge.receipt_url;
+              console.log("✅ One-time payment receipt captured:", receiptUrl);
+            }
+          } catch (error) {
+            console.error("⚠️ Error retrieving payment intent:", error.message);
+          }
+        } else if (paymentType === "SUBSCRIPTION" && session.subscription) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(
+              session.subscription,
+              { expand: ["latest_invoice"] }
+            );
+
+            const invoice = subscription.latest_invoice;
+
+            if (invoice) {
+              receiptUrl = invoice.hosted_invoice_url;
+              invoicePdf = invoice.invoice_pdf;
+            }
+
+            console.log("📋 Subscription details:", {
+              status: subscription.status,
+              trialEnd: subscription.trial_end,
+              hasTrialEnd: !!subscription.trial_end,
+            });
+
+            if (subscription.latest_invoice) {
+              const latestInvoice =
+                typeof subscription.latest_invoice === "string"
+                  ? await stripe.invoices.retrieve(subscription.latest_invoice)
+                  : subscription.latest_invoice;
+
+              receiptUrl = latestInvoice.hosted_invoice_url;
+              invoicePdf = latestInvoice.invoice_pdf;
+
+              // Store the subscription's invoice ID
+              subscriptionInvoiceId = latestInvoice.id;
+
+              console.log("📋 Latest invoice:", {
+                id: latestInvoice.id,
+                status: latestInvoice.status,
+                hasCharge: !!latestInvoice.charge,
+                amountPaid: latestInvoice.amount_paid / 100,
+              });
+            }
+          } catch (error) {
+            console.error(
+              "⚠️ Error retrieving subscription details:",
+              error.message
+            );
+          }
+        }
+
+        // ================================
+        // CREATE OR UPDATE PURCHASE
+        // ================================
+        if (!purchase) {
+          purchase = await Purchase.create({
+            student: studentId,
+            course: courseId,
+            teacher: teacherId,
+            stripeSessionId: session.id,
+            paymentIntentId: session.payment_intent || null,
+            subscriptionId: session.subscription || null,
+            stripeCustomerId: session.customer,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency,
+            paymentMethod: "stripe",
+            paymentType,
+            stripeInvoiceId: subscriptionInvoiceId || manualInvoiceId,
+            receiptUrl: receiptUrl,
+          });
+
+          await transporter.sendMail({
+            from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+            to: student.email,
+            subject: "Payment Confirmation",
+            html: baseEmailTemplate({
+              title: "Payment Confirmation",
+              content: `<p>Dear ${student.firstName},</p>
+              <p>Thank you for your payment of $${session.amount_total / 100} for the course "${course.courseTitle}".</p>
+              <p>Please find your receipt below:</p>
+              <p><a href="${receiptUrl}">View Receipt</a></p>
+              <p>Best regards,<br>Learning Vault by Acewall Scholars</p>`,
+            }),
+          });
+
+          console.log("✅ Purchase created:", purchase);
+        } else {
+          // Update existing purchase
+          purchase.receiptUrl = receiptUrl;
+          if (subscriptionInvoiceId)
+            purchase.stripeInvoiceId = subscriptionInvoiceId;
+          if (manualInvoiceId) purchase.stripeInvoiceId = manualInvoiceId;
+          await purchase.save();
+          console.log("✅ Purchase updated with receipt");
+        }
+
+        // Rest of your enrollment logic...
+        // ================================
+        // SUBSCRIPTION ENROLLMENT
+        // ================================
+        if (paymentType === "SUBSCRIPTION" && session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(
+            session.subscription
+          );
+          const subMetadata = subscription.metadata || {};
+
+          const subStudentId = subMetadata.studentId || studentId;
+          const subCourseId = subMetadata.courseId || courseId;
+
+          const shouldEnroll = ["active", "trialing"].includes(
+            subscription.status
+          );
+          if (!shouldEnroll) return;
+
+          const isTrial =
+            subscription.status === "trialing" && subscription.trial_end;
+
+          // Check if enrollment exists
+          let enrollment = await Enrollment.findOne({
+            student: subStudentId,
+            course: subCourseId,
+          });
+
+          if (!enrollment) {
+            // FIRST TIME enrollment → create
+            const newEnrollment = await Enrollment.create({
+              student: subStudentId,
+              course: subCourseId,
+              subscriptionId: session.subscription,
+              status: isTrial ? "TRIAL" : "ACTIVE",
+              enrollmentType: "SUBSCRIPTION",
+              hasUsedTrial: isTrial ? true : false, // burn trial if given
+              trial: isTrial
+                ? {
+                    status: true,
+                    endDate: new Date(subscription.trial_end * 1000),
+                  }
+                : { status: false },
+            });
+            try {
+              transporter.sendMail({
+                from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+                to: teacher.email,
+                subject: "New Enrollment",
+                html: baseEmailTemplate({
+                  title: "New Enrollment",
+                  content: `<p>Hello ${teacher.firstName},</p><p>You have a new enrollment in your course "${course.courseTitle}".</p>`,
+                }),
+              });
+            } catch (err) {
+              console.error("Error sending enrollment email:", err);
+            }
+
+            // Update user referred points
+            if (userByRefCode) {
+              userByRefCode.referralPoints =
+                (userByRefCode.referralPoints || 0) + 5;
+              await userByRefCode.save();
+              notifyReferralPointsUpdated(userByRefCode._id, 5);
+            }
+
+            // Send enrollment success notification
+            const courseData =
+              await CourseSch.findById(subCourseId).select("courseTitle");
+            if (courseData) {
+              await notifyEnrollmentSuccess(
+                subStudentId,
+                newEnrollment._id,
+                courseData.courseTitle,
+                courseData._id
+              );
+            }
+
+            console.log("✅ Subscription enrollment created");
+          } else {
+            // RE-ACTIVATE existing enrollment
+            enrollment.subscriptionId = session.subscription;
+            enrollment.enrollmentType = "SUBSCRIPTION";
+            enrollment.status = isTrial ? "TRIAL" : "ACTIVE";
+
+            // Only set trial if first time trial (never reset)
+            if (isTrial && !enrollment.hasUsedTrial) {
+              enrollment.hasUsedTrial = true;
+              enrollment.trial = {
+                status: true,
+                endDate: new Date(subscription.trial_end * 1000),
+              };
+            } else {
+              enrollment.trial = { status: false };
+            }
+
+            await enrollment.save();
+            console.log("🔁 Enrollment reactivated");
+          }
+        }
+
+        // ================================
+        // ONE-TIME PAYMENT ENROLLMENT
+        // ================================
+        if (paymentType === "ONETIME") {
+          const alreadyEnrolled = await Enrollment.findOne({
+            student: studentId,
+            course: courseId,
+          });
+
+          if (!alreadyEnrolled) {
+            const oneTimeEnrollment = await Enrollment.create({
+              student: studentId,
+              course: courseId,
+              status: "ACTIVE",
+              enrollmentType: "ONETIME",
+              stripeInvoiceId: manualInvoiceId,
+            });
+
+            try {
+              transporter.sendMail({
+                from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+                to: teacher.email,
+                subject: "New Enrollment",
+                html: baseEmailTemplate({
+                  title: "New Enrollment",
+                  content: `<p>Hello ${teacher.firstName},</p><p>You have a new enrollment in your course "${course.courseTitle}".</p>`,
+                }),
+              });
+            } catch (err) {
+              console.error("Error sending enrollment email:", err);
+            }
+
+            if (userByRefCode) {
+              userByRefCode.referralPoints =
+                (userByRefCode.referralPoints || 0) + 5;
+              await userByRefCode.save();
+
+              notifyReferralPointsUpdated(userByRefCode._id, 5);
+            }
+
+            // Send enrollment success notification
+            const courseData =
+              await CourseSch.findById(courseId).select("courseTitle");
+            if (courseData) {
+              await notifyEnrollmentSuccess(
+                studentId,
+                oneTimeEnrollment._id,
+                courseData.courseTitle,
+                courseData._id
+              );
+            }
+
+            console.log("✅ One-time enrollment created");
+          } else {
+            console.log("ℹ️ Student already enrolled");
+          }
+        }
+
+        break;
+      }
+
+      /**
+       * ================================
+       * INVOICE CREATED
+       * ================================
+       */
+      case "invoice.created": {
+        const invoice = event.data.object;
+
+        console.log("📋 Invoice created:", {
+          id: invoice.id,
+          subscription: invoice.subscription,
+          billingReason: invoice.billing_reason,
+        });
+
+        await Purchase.findOneAndUpdate(
+          { stripeInvoiceId: invoice.id },
+          {
+            billingReason: invoice.billing_reason,
+            status: "draft",
+          }
+        );
+
+        break;
+      }
+
+      /**
+       * ================================
+       * INVOICE FINALIZED
+       * ================================
+       */
+      case "invoice.finalized": {
+        const invoice = event.data.object;
+
+        if (!invoice) break;
+
+        console.log("📋 Invoice finalized:", {
+          id: invoice.id,
+          amountDue: invoice.amount_due / 100,
+          status: invoice.status,
+        });
+
+        await Purchase.findOneAndUpdate(
+          { stripeInvoiceId: invoice.id },
+          {
+            invoiceUrl: invoice.hosted_invoice_url,
+            invoicePdf: invoice.invoice_pdf,
+            amount: invoice.amount_due / 100,
+            currency: invoice.currency,
+            status: invoice.amount_due === 0 ? "trial" : "paid",
+          }
+        );
+
+        break;
+      }
+
+      /**
+       * ================================
+       * INVOICE PAYMENT SUCCEEDED
+       * This captures receipts for subscription renewals and first payments!
+       * ================================
+       */
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+
+        console.log("📋 Invoice payment succeeded:", {
+          invoiceId: invoice.id,
+          subscription: invoice.subscription,
+          charge: invoice.charge,
+          amountPaid: invoice.amount_paid / 100,
+          billingReason: invoice.billing_reason,
+        });
+
+        // ================================
+        // GET RECEIPT URL
+        // ================================
+        let receiptUrl = null;
+
+        if (invoice.charge) {
+          try {
+            const charge = await stripe.charges.retrieve(invoice.charge);
+            receiptUrl = charge.receipt_url;
+            console.log(`✅ Receipt URL captured: ${receiptUrl}`);
+          } catch (error) {
+            console.error("⚠️ Error retrieving charge:", error.message);
+          }
+        }
+
+        // ================================
+        // UPDATE PURCHASE
+        // ================================
+        const updateData = {
+          invoiceUrl: invoice.hosted_invoice_url,
+          invoicePdf: invoice.invoice_pdf,
+          billingReason: invoice.billing_reason,
+          status: "paid",
+        };
+
+        if (receiptUrl) {
+          updateData.receiptUrl = receiptUrl;
+        }
+
+        let purchase = null;
+
+        if (invoice.subscription) {
+          purchase = await Purchase.findOneAndUpdate(
+            { subscriptionId: invoice.subscription },
+            updateData,
+            { new: true, sort: { createdAt: -1 } }
+          );
+        }
+
+        if (!purchase) {
+          purchase = await Purchase.findOneAndUpdate(
+            { stripeInvoiceId: invoice.id },
+            updateData,
+            { new: true }
+          );
+        }
+
+        if (!purchase) {
+          console.log("⚠️ No purchase found");
+          break;
+        }
+
+        console.log("✅ Purchase updated:", purchase._id);
+
+        // ================================
+        // ACTIVATE ENROLLMENT
+        // ================================
+        await Enrollment.updateOne(
+          { subscriptionId: invoice.subscription },
+          { $set: { status: "ACTIVE" } }
+        );
+
+        console.log("✅ Enrollment activated");
+
+        // ================================
+        // SEND EMAIL ONLY FOR RENEWAL
+        // ================================
+        if (invoice.billing_reason === "subscription_cycle") {
+          try {
+            const student = await User.findById(purchase.student);
+            const course = await CourseSch.findById(purchase.course);
+
+            await transporter.sendMail({
+              from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+              to: student.email,
+              subject: "Subscription Renewed Successfully",
+              html: baseEmailTemplate({
+                title: "Subscription Renewed",
+                content: `
+            <p>Dear ${student.firstName},</p>
+
+            <p>Your subscription for the course "<strong>${course.courseTitle}</strong>" has been renewed successfully.</p>
+
+            <p><strong>Amount Paid:</strong> $${invoice.amount_paid / 100}</p>
+
+            ${
+              receiptUrl
+                ? `<p><a href="${receiptUrl}">View Receipt</a></p>`
+                : ""
+            }
+
+            <p>Your access remains active. Thank you for continuing your learning journey with us.</p>
+
+            <p>Best regards,<br>
+            Learning Vault by Acewall Scholars</p>
+          `,
+              }),
+            });
+
+            console.log("✅ Renewal email sent");
+          } catch (error) {
+            console.error("❌ Failed to send renewal email:", error.message);
+          }
+        }
+
+        break;
+      }
+
+      /**
+       * ================================
+       * INVOICE PAID (Legacy support)
+       * ================================
+       */
+      case "invoice.paid": {
+        const invoice = event.data.object;
+
+        const metadata = invoice.metadata || {};
+        const { studentId, courseId, teacherId, paymentType } = metadata;
+
+        console.log("📋 Invoice paid (legacy):", {
+          invoiceId: invoice.id,
+          hasMetadata: !!studentId && !!courseId,
+        });
+
+        if (!studentId || !courseId) {
+          console.log("⚠️ Missing metadata on invoice:", invoice.id);
+          break;
+        }
+
+        // Get receipt URL
+        let receiptUrl = null;
+
+        if (invoice.charge) {
+          try {
+            const charge = await stripe.charges.retrieve(invoice.charge);
+            receiptUrl = charge.receipt_url;
+            console.log(`✅ Receipt URL: ${receiptUrl}`);
+          } catch (error) {
+            console.error("⚠️ Error retrieving charge:", error.message);
+          }
+        }
+
+        // Update purchase
+        await Purchase.findOneAndUpdate(
+          { stripeInvoiceId: invoice.id },
+          {
+            invoiceUrl: invoice.hosted_invoice_url,
+            invoicePdf: invoice.invoice_pdf,
+            billingReason: invoice.billing_reason,
+            status: "paid",
+            ...(receiptUrl && { receiptUrl }),
+          }
+        );
+
+        // Activate subscription enrollment
+        if (invoice.subscription) {
+          await Enrollment.updateOne(
+            { subscriptionId: invoice.subscription },
+            { $set: { status: "ACTIVE" } }
+          );
+        }
+
+        // One-time enrollment
+        if (!invoice.subscription) {
+          await Enrollment.updateOne(
+            { student: studentId, course: courseId },
+            {
+              $setOnInsert: {
+                student: studentId,
+                course: courseId,
+                status: "ACTIVE",
+                enrollmentType: "ONETIME",
+              },
+            },
+            { upsert: true }
+          );
+        }
+
+        break;
+      }
+
+      /**
+       * ================================
+       * SUBSCRIPTION UPDATED
+       * ================================
+       */
+      case "customer.subscription.updated": {
+        const subscription = event.data.object;
+
+        let enrollmentStatus = "ACTIVE";
+        let trialStatus = false;
+        let trialEndDate = null;
+        let cancellationDate = null;
+
+        const fullSubscription = await stripe.subscriptions.retrieve(
+          subscription.id
+        );
+        // Trial handling
+        if (subscription.status === "trialing") {
+          enrollmentStatus = "TRIAL";
+          trialStatus = true;
+          trialEndDate = subscription.trial_end
+            ? new Date(subscription.trial_end * 1000)
+            : null;
+        }
+
+        // Payment issues
+        if (["past_due", "unpaid"].includes(subscription.status)) {
+          enrollmentStatus = "PAST_DUE";
+        }
+
+        // Fully cancelled
+        if (["canceled", "incomplete_expired"].includes(subscription.status)) {
+          enrollmentStatus = "CANCELLED";
+
+          console.log(subscription, "subscription");
+          console.log(subscription.canceled_at, "subscription.canceled_at");
+
+          cancellationDate = subscription.canceled_at
+            ? new Date(subscription.canceled_at * 1000)
+            : new Date();
+          console.log("Subscription cancelled on:", cancellationDate);
+        }
+
+        // Active but cancel scheduled
+        if (subscription.cancel_at_period_end === true) {
+          enrollmentStatus = "APPLIEDFORCANCEL";
+
+          // 🔥 Fetch full subscription
+          const futureCancelTime =
+            subscription.cancel_at || subscription.current_period_end;
+
+          cancellationDate = futureCancelTime
+            ? new Date(futureCancelTime * 1000)
+            : null;
+          console.log("Cancellation scheduled for:", cancellationDate);
+        }
+
+        // Active (no cancel scheduled)
+        if (
+          subscription.status === "active" &&
+          subscription.cancel_at_period_end === false
+        ) {
+          enrollmentStatus = "ACTIVE";
+          cancellationDate = null;
+        }
+
+        // Update enrollment
+        const enrollment = await Enrollment.findOne({
+          subscriptionId: subscription.id,
+        });
+
+        if (enrollment) {
+          enrollment.status = enrollmentStatus;
+
+          if (cancellationDate) {
+            enrollment.cancellationDate = cancellationDate;
+          }
+
+          // Trial logic (only once)
+          if (trialStatus && !enrollment.hasUsedTrial) {
+            enrollment.hasUsedTrial = true;
+            enrollment.trial = {
+              status: true,
+              endDate: trialEndDate,
+            };
+          } else {
+            enrollment.trial = { status: false };
+          }
+
+          await enrollment.save();
+          console.log("🔁 Enrollment updated via subscription webhook");
+        }
+
+        break;
+      }
+
+      /**
+       * ================================
+       * PAYMENT FAILED
+       * ================================
+       */
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+
+        console.log("❌ Payment failed:", {
+          invoiceId: invoice.id,
+          subscription: invoice.subscription,
+          amountDue: invoice.amount_due / 100,
+        });
+
+        // ================================
+        // UPDATE PURCHASE STATUS
+        // ================================
+        const purchase = await Purchase.findOneAndUpdate(
+          { stripeInvoiceId: invoice.id },
+          { $set: { status: "failed" } },
+          { new: true }
+        );
+
+        // ================================
+        // UPDATE ENROLLMENT STATUS
+        // ================================
+        if (invoice.subscription) {
+          await Enrollment.updateOne(
+            { subscriptionId: invoice.subscription },
+            { $set: { status: "PAST_DUE" } }
+          );
+        }
+
+        // ================================
+        // SEND PAYMENT FAILED EMAIL
+        // ================================
+        if (purchase) {
+          try {
+            const student = await User.findById(purchase.student);
+            const course = await CourseSch.findById(purchase.course);
+
+            await transporter.sendMail({
+              from: `"Learning Vault by Acewall Scholars" <${process.env.MAIL_USER}>`,
+              to: student.email,
+              subject: "Payment Failed – Action Required",
+              html: baseEmailTemplate({
+                title: "Payment Failed",
+                content: `
+            <p>Dear ${student.firstName},</p>
+
+            <p>We were unable to process your subscription payment for the course 
+            "<strong>${course.courseTitle}</strong>".</p>
+
+            <p><strong>Amount Due:</strong> $${invoice.amount_due / 100}</p>
+
+            <p>Please update your payment method to continue your access without interruption.</p>
+            ${
+              invoice.hosted_invoice_url
+                ? `<p><a href="${invoice.hosted_invoice_url}">Update Payment Method</a></p>`
+                : ""
+            }
+
+            <p>If payment is not completed, your access may be suspended.</p>
+
+            <p>Best regards,<br>
+            Learning Vault by Acewall Scholars</p>
+          `,
+              }),
+            });
+
+            console.log("✅ Payment failed email sent");
+          } catch (error) {
+            console.error(
+              "❌ Failed to send payment failed email:",
+              error.message
+            );
+          }
+        } else {
+          console.log("⚠️ Purchase not found for failed invoice");
+        }
+
+        break;
+      }
+      /**
+       * ================================
+       * SUBSCRIPTION CANCELED
+       * ================================
+       */
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+
+        const cancellationDate = subscription.canceled_at
+          ? new Date(subscription.canceled_at * 1000)
+          : new Date();
+
+        await Enrollment.updateOne(
+          { subscriptionId: subscription.id },
+          { $set: { status: "CANCELLED", cancellationDate } }
+        );
+
+        break;
+      }
+
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+        break;
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error("❌ Webhook processing error:", err);
+    console.error("Stack trace:", err.stack);
+    res.status(500).json({ error: "Webhook handler failed" });
+  }
+};
+
+export const getpurchases = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const purchases = await Purchase.find({ student: userId })
+      .populate("course", "courseTitle thumbnail price") // Adjust fields based on your Course schema
+      .populate("teacher", "name email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, data: purchases });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const cancelSubscriptionAtPeriodEnd = async (req, res) => {
+  const { subscriptionId, comment } = req.body;
+
+  try {
+    // Update Stripe subscription
+    const subscription = await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+      metadata: {
+        cancellation_reason: comment,
+      },
+    });
+
+    // Calculate cancellation date (period end or 30 days from now as fallback)
+    let cancellationDate;
+    if (
+      subscription.current_period_end &&
+      typeof subscription.current_period_end === "number"
+    ) {
+      cancellationDate = new Date(subscription.current_period_end * 1000);
+    } else {
+      // Fallback: 30 days from now if period end not available
+      cancellationDate = new Date();
+      cancellationDate.setDate(cancellationDate.getDate() + 30);
+    }
+
+    // Update enrollment in database immediately
+    await Enrollment.findOneAndUpdate(
+      { subscriptionId },
+      {
+        status: "APPLIEDFORCANCEL",
+        cancellationDate: cancellationDate,
+        cancellationReason: comment || "User requested cancellation",
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Subscription will cancel at period end",
+      cancelAt: cancellationDate,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const undoCancellation = async (req, res) => {
+  const { subscriptionId } = req.body;
+
+  try {
+    // Remove cancellation from Stripe subscription
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false,
+    });
+
+    // Update enrollment status back to ACTIVE
+    await Enrollment.findOneAndUpdate(
+      { subscriptionId },
+      {
+        status: "ACTIVE",
+        cancellationDate: null,
+        cancellationReason: null,
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Subscription cancellation has been undone",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+};

@@ -1,0 +1,198 @@
+import Posts from "../../Models/PostModels/post.model.js";
+import Enrollment from "../../Models/Enrollement.model.js";
+import CourseSch from "../../Models/courses.model.sch.js";
+import { NotFoundError, AuthenticationError } from "../../Utiles/errors.js";
+import { asyncHandler } from "../../middlewares/errorHandler.middleware.js";
+import { notifyNewCoursePost } from "../../Utiles/notificationService.js";
+import { EXCLUDED_ENROLLMENT_STATUSES } from "../../Utiles/notificationConstants.js";
+
+export const createPost = asyncHandler(async (req, res) => {
+  const {
+    text,
+    color,
+    postType,
+    courseId,
+    driveUrl,
+    drivePublicId,
+    driveFilename,
+  } = req.body;
+  const assets = req.files || [];
+  const author = req.user._id;
+
+  const uploadedFiles = assets.map((asset) => {
+    let fileType = "file";
+    if (asset.mimetype.startsWith("video/")) fileType = "videos";
+    else if (asset.mimetype.startsWith("image/")) fileType = "image";
+
+    return {
+      url: `${process.env.ASSET_URL}uploads/${fileType}/${asset.filename}`,
+      fileName: asset.originalname,
+      type: asset.mimetype,
+    };
+  });
+
+  // Handle Google Drive upload (Cloudinary URL)
+  if (driveUrl) {
+    uploadedFiles.push({
+      url: driveUrl,
+      fileName: driveFilename || "drive-file",
+      type: driveUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+        ? "image/jpeg"
+        : driveUrl.match(/\.(mp4|webm|mov)$/i)
+          ? "video/mp4"
+          : "application/octet-stream",
+    });
+  }
+
+  const postData = {
+    text,
+    assets: uploadedFiles, // Now correctly structured as an array of objects
+    author,
+    color,
+    postType: postType || "public",
+  };
+
+  // Only add course if postType is course AND courseId is a valid hex string
+  if (postType === "course" && courseId && courseId.length === 24) {
+    postData.course = courseId;
+  }
+
+  const post = new Posts(postData);
+  await post.save();
+
+  // Send notification to enrolled students if this is a course post
+  if (postType === "course" && courseId) {
+    try {
+      const course = await CourseSch.findById(courseId).select("courseTitle");
+      if (course) {
+        const authorName = `${req.user.firstName} ${req.user.lastName}`;
+        await notifyNewCoursePost(
+          post._id,
+          courseId,
+          course.courseTitle,
+          authorName,
+          author,
+        );
+      }
+    } catch (error) {
+      console.error("Course post notification error:", error.message);
+    }
+  }
+
+  return res.status(201).json({
+    post,
+    message: "Post created successfully",
+  });
+});
+export const getPosts = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const userRole = req.user.role;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  // 🎯 Get courseId from query params (e.g., /getPosts?courseId=123)
+  const { courseId } = req.query;
+
+  // 1️⃣ Find all courses this user is associated with
+  let myCourseIds = [];
+  if (userRole === "teacher" || userRole === "admin") {
+    const ownedCourses = await CourseSch.find({ createdby: userId }).select(
+      "_id",
+    );
+    myCourseIds = ownedCourses.map((c) => c._id);
+  } else {
+    // Exclude CANCELLED enrollments - students lose access to course posts
+    const enrollments = await Enrollment.find({
+      student: userId,
+      status: { $ne: "CANCELLED" },
+    }).select("course");
+    myCourseIds = enrollments.map((e) => e.course);
+  }
+
+  // 2️⃣ Construct the Query
+  let query = {};
+
+  if (courseId && courseId !== "all") {
+    // Check if the user has permission to see this specific course
+    const hasAccess = myCourseIds.some((id) => id.toString() === courseId);
+    if (!hasAccess) {
+      throw new AuthenticationError(
+        "Access denied to this course feed",
+        "POST_001",
+      );
+    }
+    query = { postType: "course", course: courseId };
+  } else {
+    // Default: Show all Public posts OR Course posts from user's joined courses
+    query = {
+      $or: [
+        { postType: "public" },
+        { postType: "course", course: { $in: myCourseIds } },
+      ],
+    };
+  }
+
+  // 3️⃣ Execute Query
+  const totalPosts = await Posts.countDocuments(query);
+  const posts = await Posts.find(query)
+    .populate("author", "_id firstName middleName lastName profileImg")
+    // Populate course info so we can show course code/title on the PostCard
+    .populate("course", "courseTitle courseCode")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const totalPages = Math.ceil(totalPosts / limit);
+
+  return res.json({
+    currentPage: page,
+    totalPages,
+    totalPosts,
+    limit,
+    posts,
+    message: "Posts fetched successfully",
+  });
+});
+
+export const specificUserPosts = asyncHandler(async (req, res) => {
+  const userId = req.params.id;
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+
+  const skip = (page - 1) * limit;
+
+  const totalPosts = await Posts.countDocuments({ author: userId });
+
+  const posts = await Posts.find({ author: userId })
+    .populate("author", "firstName middleName lastName profileImg")
+    .sort({ createdAt: -1 }) // newest first
+    .skip(skip)
+    .limit(limit);
+
+  const totalPages = Math.ceil(totalPosts / limit);
+
+  return res.json({
+    currentPage: page,
+    totalPages,
+    totalPosts,
+    limit,
+    posts,
+    message: "Posts fetched successfully",
+  });
+});
+
+export const deletePost = asyncHandler(async (req, res) => {
+  const { postId } = req.params; // ✅ get from params
+
+  const post = await Posts.findByIdAndDelete(postId);
+
+  if (!post) {
+    throw new NotFoundError("Post not found", "POST_002");
+  }
+
+  return res.status(200).json({
+    message: "Post deleted successfully",
+  });
+});

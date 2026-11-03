@@ -1,0 +1,4256 @@
+﻿{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Acewall API",
+    "version": "1.0.0",
+    "description": "OpenAPI spec for Acewall backend ."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5050",
+      "description": "Local dev server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "FileObject": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "public_id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          }
+        }
+      },
+      "Course": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "courseTitle": {
+            "type": "string"
+          },
+          "courseDescription": {
+            "type": "string"
+          },
+          "thumbnail": {
+            "$ref": "#/components/schemas/FileObject"
+          },
+          "category": {
+            "type": "object"
+          },
+          "subcategory": {
+            "type": "object"
+          },
+          "createdby": {
+            "type": "object"
+          },
+          "price": {
+            "type": "number"
+          },
+          "isVerified": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Lesson": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "pdfFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileObject"
+            }
+          }
+        }
+      },
+      "Chapter": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "lessons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lesson"
+            }
+          }
+        }
+      },
+      "Semester": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "CourseStatsItem": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "students": {
+            "type": "integer"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/admin/allTeacher": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get all teachers",
+        "responses": {
+          "200": {
+            "description": "List of teachers"
+          }
+        }
+      }
+    },
+    "/api/admin/allstudent": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get all students",
+        "responses": {
+          "200": {
+            "description": "List of students"
+          }
+        }
+      }
+    },
+    "/api/admin/student-enrolled-courses/{id}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get courses a student is enrolled in",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of enrolled courses"
+          }
+        }
+      }
+    },
+    "/api/admin/getStudentById/{id}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get student details by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Student details"
+          }
+        }
+      }
+    },
+    "/api/admin/getTeacherById/{id}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get teacher details by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Teacher details"
+          }
+        }
+      }
+    },
+    "/api/admin/updateSemArchiveStatus/{semesterId}": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update semester archive status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "semesterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Archive status updated"
+          }
+        }
+      }
+    },
+    "/api/admin/updateQtrArchiveStatus/{quarterId}": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update quarter archive status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quarterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Archive status updated"
+          }
+        }
+      }
+    },
+    "/api/admin/adminDeshboard": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get admin dashboard data",
+        "responses": {
+          "200": {
+            "description": "Dashboard data with courses"
+          }
+        }
+      }
+    },
+    "/api/admin/getCategories": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get all categories for admin",
+        "responses": {
+          "200": {
+            "description": "List of categories"
+          }
+        }
+      }
+    },
+    "/api/ai/ask": {
+      "post": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Ask AI a question",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI response"
+          }
+        }
+      }
+    },
+    "/api/ai/getChatHistory": {
+      "get": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Get chat history for current user",
+        "responses": {
+          "200": {
+            "description": "Chat history"
+          }
+        }
+      }
+    },
+    "/api/ai/askupdated": {
+      "post": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Ask AI (updated version)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI response"
+          }
+        }
+      }
+    },
+    "/api/ai/generateContentForTeacher": {
+      "post": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Generate content for teachers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated content"
+          }
+        }
+      }
+    },
+    "/api/ai/generateImage": {
+      "post": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Generate an image using AI",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated image URL"
+          }
+        }
+      }
+    },
+    "/api/assessment-category/{courseId}": {
+      "post": {
+        "tags": [
+          "Assessment Category"
+        ],
+        "summary": "Create an assessment category for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "weight": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created successfully"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Assessment Category"
+        ],
+        "summary": "Get all assessment categories for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of categories"
+          }
+        }
+      }
+    },
+    "/api/assessment-category/{courseId}/{categoryId}": {
+      "put": {
+        "tags": [
+          "Assessment Category"
+        ],
+        "summary": "Edit category weight",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "categoryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "weight": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category weight updated"
+          }
+        }
+      }
+    },
+    "/api/assessment-category/{categoryId}": {
+      "delete": {
+        "tags": [
+          "Assessment Category"
+        ],
+        "summary": "Delete an assessment category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "categoryId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/{assessmentId}/send-reminder": {
+      "post": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Send reminder for an assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reminder sent successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/stats/{assessmentId}": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Get assessment statistics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assessment statistics"
+          }
+        }
+      }
+    },
+    "/api/assessment/findReminderTime/{assessmentId}": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Get reminder time for assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminder time details"
+          }
+        }
+      }
+    },
+    "/api/assessment/setReminder/{assessmentId}": {
+      "put": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Set reminder time for assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reminder set successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/final-assessment/course/{courseId}": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Check if a final assessment exists for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Check result"
+          }
+        }
+      }
+    },
+    "/api/assessment/create": {
+      "post": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Create a new assessment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "courseId": {
+                    "type": "string"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Assessment created successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/allAssessmentByTeacher": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Get all assessments created by the teacher",
+        "responses": {
+          "200": {
+            "description": "List of assessments"
+          }
+        }
+      }
+    },
+    "/api/assessment/getAllassessmentforStudent": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Get all assessments for the student",
+        "responses": {
+          "200": {
+            "description": "List of assessments"
+          }
+        }
+      }
+    },
+    "/api/assessment/delete/{id}": {
+      "delete": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Delete an assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assessment deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/uploadFiles/{assessmentId}/{fileId}": {
+      "put": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Upload files to an assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fileId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Files uploaded successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/deleteFile/{assessmentId}/{fileId}": {
+      "delete": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Delete a file from assessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fileId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/{assessmentId}": {
+      "get": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Get assessment by ID (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assessment details"
+          }
+        }
+      }
+    },
+    "/api/assessment/editAssessment/{assessmentId}": {
+      "put": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Edit assessment information",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assessment updated successfully"
+          }
+        }
+      }
+    },
+    "/api/assessment/createAssessment/updated": {
+      "post": {
+        "tags": [
+          "Assessment"
+        ],
+        "summary": "Create assessment (updated version)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Assessment created successfully"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new user (initiates signup flow)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signup initiated"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Returns auth token and user info"
+          }
+        }
+      }
+    },
+    "/api/category/get": {
+      "get": {
+        "tags": [
+          "Category"
+        ],
+        "summary": "Get all categories",
+        "responses": {
+          "200": {
+            "description": "List of categories"
+          }
+        }
+      }
+    },
+    "/api/category/create": {
+      "post": {
+        "tags": [
+          "Category"
+        ],
+        "summary": "Create a category",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created"
+          }
+        }
+      }
+    },
+    "/api/category/delete/{categoryId}": {
+      "delete": {
+        "tags": [
+          "Category"
+        ],
+        "summary": "Delete a category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "categoryId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category deleted"
+          }
+        }
+      }
+    },
+    "/api/category/subcategories/{categoryId}": {
+      "get": {
+        "tags": [
+          "Category"
+        ],
+        "summary": "Get subcategories by category id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "categoryId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategories list"
+          }
+        }
+      }
+    },
+    "/api/category/edit/{categoryId}": {
+      "put": {
+        "tags": [
+          "Category"
+        ],
+        "summary": "Edit a category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "categoryId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated"
+          }
+        }
+      }
+    },
+    "/api/comment/{id}": {
+      "get": {
+        "tags": [
+          "Comment"
+        ],
+        "summary": "Get comments for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Course ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments"
+          }
+        }
+      }
+    },
+    "/api/comment/sendComment/{id}": {
+      "post": {
+        "tags": [
+          "Comment"
+        ],
+        "summary": "Send a comment for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Course ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created"
+          }
+        }
+      }
+    },
+    "/api/comment/teacher/allComment": {
+      "get": {
+        "tags": [
+          "Comment"
+        ],
+        "summary": "Get all comments for teacher's courses",
+        "responses": {
+          "200": {
+            "description": "Comments list"
+          }
+        }
+      }
+    },
+    "/api/comment/{courseId}/comment/{commentId}": {
+      "delete": {
+        "tags": [
+          "Comment"
+        ],
+        "summary": "Delete a comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "commentId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment deleted"
+          }
+        }
+      }
+    },
+    "/api/contact/sendSchoolcontactmail": {
+      "post": {
+        "tags": [
+          "Contact"
+        ],
+        "summary": "Send a contact email to school/support",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email sent"
+          }
+        }
+      }
+    },
+    "/api/conversation/create": {
+      "post": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Create a conversation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Conversation created"
+          }
+        }
+      }
+    },
+    "/api/conversation/get": {
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Get current user's conversations",
+        "responses": {
+          "200": {
+            "description": "Conversations list"
+          }
+        }
+      }
+    },
+    "/api/conversation/lastSeen/{conversationId}": {
+      "patch": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Update last seen for a conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Last seen updated"
+          }
+        }
+      }
+    },
+    "/api/conversation/getTeacherforStudent": {
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Get teachers for the student to start conversation with",
+        "responses": {
+          "200": {
+            "description": "Teachers list"
+          }
+        }
+      }
+    },
+    "/api/conversation/getStudentsByOfTeacher/{courseId}": {
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Get students of a teacher for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Students list"
+          }
+        }
+      }
+    },
+    "/api/chapter/chapterofCourse/{courseId}": {
+      "get": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Get chapters for a course (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chapters list"
+          }
+        }
+      }
+    },
+    "/api/chapter/create/{courseId}": {
+      "post": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Create a chapter for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "quarter": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Chapter created"
+          }
+        }
+      }
+    },
+    "/api/chapter/{chapterId}": {
+      "delete": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Delete a chapter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chapter deleted"
+          }
+        }
+      }
+    },
+    "/api/chapter/{courseId}/{quarterId}": {
+      "get": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Get chapters for a course and quarter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "quarterId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/chapter/chapter&lessons/{chapterId}": {
+      "get": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Get a chapter with nested lessons (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chapter with lessons"
+          }
+        }
+      }
+    },
+    "/api/chapter/edit/{chapterId}": {
+      "put": {
+        "tags": [
+          "Chapter"
+        ],
+        "summary": "Edit chapter details",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chapter updated"
+          }
+        }
+      }
+    },
+    "/api/course/{courseId}/export": {
+      "get": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Export full course data (nested)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Course ID to export"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full course export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "course": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Course not found"
+          }
+        }
+      }
+    },
+    "/api/course/import-full-course": {
+      "post": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Import a full course from nested JSON",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Full course JSON (semesters, curriculum, assessments, discussions)"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Course imported"
+          }
+        }
+      }
+    },
+    "/api/course/create": {
+      "post": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Create a new course (multipart/form-data)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "thumbnail": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Course created"
+          }
+        }
+      }
+    },
+    "/api/course/thumbnail/{courseId}": {
+      "put": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Upload/replace course thumbnail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "thumbnail": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thumbnail updated"
+          }
+        }
+      }
+    },
+    "/api/course/editCourseBasics/{courseId}": {
+      "put": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Edit basic course information",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "courseTitle": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "subcategory": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "teachingPoints": {
+                    "type": "string",
+                    "description": "JSON-stringified array"
+                  },
+                  "requirements": {
+                    "type": "string",
+                    "description": "JSON-stringified array"
+                  },
+                  "courseDescription": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Course updated"
+          }
+        }
+      }
+    },
+    "/api/course/editCourseDocuments/{courseId}": {
+      "put": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Upload or update course verification documents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resume": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "certificate": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "governmentId": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "transcript": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Course documents updated"
+          }
+        }
+      }
+    },
+    "/api/course/stats/{courseId}": {
+      "get": {
+        "tags": [
+          "Course"
+        ],
+        "summary": "Get enrollment stats for a course (time series)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "range",
+            "schema": {
+              "type": "string"
+            },
+            "description": "time range filter (7d|30d|6m)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollment stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stats": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CourseStatsItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lesson/create": {
+      "post": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Create a lesson with optional PDF files",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "chapter": {
+                    "type": "string"
+                  },
+                  "pdfFiles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lesson created"
+          }
+        }
+      }
+    },
+    "/api/lesson/{chapterId}": {
+      "get": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Get lessons for a chapter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lessons list"
+          }
+        }
+      }
+    },
+    "/api/lesson/{lessonId}": {
+      "delete": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Delete a lesson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lessonId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lesson deleted"
+          }
+        }
+      }
+    },
+    "/api/lesson/edit/{lessonId}": {
+      "put": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Edit lesson details",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lessonId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "youtubeLinks": {
+                    "type": "string"
+                  },
+                  "otherLink": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lesson updated"
+          }
+        }
+      }
+    },
+    "/api/lesson/delete/{lessonId}/{fileId}": {
+      "delete": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Delete a file from a lesson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lessonId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "fileId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File deleted"
+          }
+        }
+      }
+    },
+    "/api/lesson/addMoreFiles/{lessonId}": {
+      "put": {
+        "tags": [
+          "Lesson"
+        ],
+        "summary": "Add more PDF files to a lesson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lessonId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pdfFiles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Files added"
+          }
+        }
+      }
+    },
+    "/api/quarter/create": {
+      "post": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Create a quarter",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "semesterId": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Quarter created successfully"
+          }
+        }
+      }
+    },
+    "/api/quarter/get": {
+      "get": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Get all quarters",
+        "responses": {
+          "200": {
+            "description": "List of quarters"
+          }
+        }
+      }
+    },
+    "/api/quarter/getquarters/{semesterId}": {
+      "post": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Get quarters of a semester",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "semesterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of quarters"
+          }
+        }
+      }
+    },
+    "/api/quarter/get/{semesterId}": {
+      "get": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Get quarters for a semester",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "semesterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quarters with semester info"
+          }
+        }
+      }
+    },
+    "/api/quarter/getDatesofQuarter/{quarterId}": {
+      "get": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Get dates of a quarter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quarterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quarter dates"
+          }
+        }
+      }
+    },
+    "/api/quarter/editQuarter/{quarterId}": {
+      "put": {
+        "tags": [
+          "Quarter"
+        ],
+        "summary": "Edit a quarter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quarterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quarter updated successfully"
+          }
+        }
+      }
+    },
+    "/api/semester/create/{courseId}": {
+      "post": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Create a semester for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Semester created successfully"
+          }
+        }
+      }
+    },
+    "/api/semester/getSemesterOfCourse/{courseId}": {
+      "get": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Get all semesters of a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of semesters"
+          }
+        }
+      }
+    },
+    "/api/semester/getSemesterwithQuarter": {
+      "get": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Get semester with quarters",
+        "responses": {
+          "200": {
+            "description": "Semester with quarters"
+          }
+        }
+      }
+    },
+    "/api/semester/selectingNewSemesterwithQuarter/{courseId}": {
+      "post": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Select a new semester with quarters for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Semester selected successfully"
+          }
+        }
+      }
+    },
+    "/api/semester/editSemester/{semesterId}": {
+      "put": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Edit a semester",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "semesterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Semester updated successfully"
+          }
+        }
+      }
+    },
+    "/api/semester/getSemesterWithId/{semesterId}": {
+      "get": {
+        "tags": [
+          "Semester"
+        ],
+        "summary": "Get semester by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "semesterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Semester details"
+          }
+        }
+      }
+    },
+    "/api/discussion/create": {
+      "post": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Create a discussion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Discussion created successfully"
+          }
+        }
+      }
+    },
+    "/api/discussion/studentDiscussion": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get discussions for student",
+        "responses": {
+          "200": {
+            "description": "List of discussions"
+          }
+        }
+      }
+    },
+    "/api/discussion/all": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get all discussions for teacher",
+        "responses": {
+          "200": {
+            "description": "List of discussions"
+          }
+        }
+      }
+    },
+    "/api/discussion/{id}": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get discussion by ID (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Discussion details"
+          }
+        }
+      }
+    },
+    "/api/discussion/chapter/{chapterId}": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get discussions for a chapter (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chapterId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of chapter discussions"
+          }
+        }
+      }
+    },
+    "/api/discussion/lesson/{lessonId}": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get discussions for a lesson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of lesson discussions"
+          }
+        }
+      }
+    },
+    "/api/discussion/course/{courseId}": {
+      "get": {
+        "tags": [
+          "Discussion"
+        ],
+        "summary": "Get discussions for a course (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of course discussions"
+          }
+        }
+      }
+    },
+    "/api/discussion-comment/get/{id}": {
+      "get": {
+        "tags": [
+          "Discussion Comment"
+        ],
+        "summary": "Get comments for a discussion (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments"
+          }
+        }
+      }
+    },
+    "/api/discussion-comment/sendComment/{id}": {
+      "post": {
+        "tags": [
+          "Discussion Comment"
+        ],
+        "summary": "Send a comment on discussion (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comment": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment sent successfully"
+          }
+        }
+      }
+    },
+    "/api/discussion-comment/delete/{id}": {
+      "delete": {
+        "tags": [
+          "Discussion Comment"
+        ],
+        "summary": "Delete a discussion comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/discussion-comment/gradeDiscussionofStd/{discID}/{discussionCommentId}": {
+      "put": {
+        "tags": [
+          "Discussion Comment"
+        ],
+        "summary": "Grade a student's discussion comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "discID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "discussionCommentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grade": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discussion comment graded"
+          }
+        }
+      }
+    },
+    "/api/discussion-comment/isCommentedInDiscussion/{id}": {
+      "get": {
+        "tags": [
+          "Discussion Comment"
+        ],
+        "summary": "Check if user has commented in discussion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment status"
+          }
+        }
+      }
+    },
+    "/api/reply-discussion/send/{commentId}": {
+      "post": {
+        "tags": [
+          "Discussion Reply"
+        ],
+        "summary": "Send a reply to a discussion comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "commentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reply": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reply sent successfully"
+          }
+        }
+      }
+    },
+    "/api/reply-discussion/get/{commentId}": {
+      "get": {
+        "tags": [
+          "Discussion Reply"
+        ],
+        "summary": "Get replies for a comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "commentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of replies"
+          }
+        }
+      }
+    },
+    "/api/reply-discussion/replycount/{commentId}": {
+      "get": {
+        "tags": [
+          "Discussion Reply"
+        ],
+        "summary": "Get reply count for a comment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "commentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reply count"
+          }
+        }
+      }
+    },
+    "/api/enrollment/my-courses": {
+      "get": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "Get current user's enrolled courses",
+        "responses": {
+          "200": {
+            "description": "Enrolled courses list"
+          }
+        }
+      }
+    },
+    "/api/enrollment/create/{courseId}": {
+      "post": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "Enroll in a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Enrollment created"
+          }
+        }
+      }
+    },
+    "/api/enrollment/isEnrolled/{courseId}": {
+      "get": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "Check if current user is enrolled in a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrollment status"
+          }
+        }
+      }
+    },
+    "/api/enrollment/unenroll/{courseId}": {
+      "delete": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "Unenroll from a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unenrolled successfully"
+          }
+        }
+      }
+    },
+    "/api/gpa/setGPAscale/{courseId}": {
+      "post": {
+        "tags": [
+          "GPA"
+        ],
+        "summary": "Set GPA scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GPA scale set successfully"
+          }
+        }
+      }
+    },
+    "/api/gpa/get/{courseId}": {
+      "get": {
+        "tags": [
+          "GPA"
+        ],
+        "summary": "Get GPA scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GPA scale"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getGradebook/{studentId}/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get student gradebook for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "studentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Student gradebook"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getOverallGradeReport": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get overall grade report for student",
+        "responses": {
+          "200": {
+            "description": "Overall grade report"
+          }
+        }
+      }
+    },
+    "/api/gradebook/gradingScale/{courseId}": {
+      "post": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Set grading scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Grading scale set successfully"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getGradingScale/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get grading scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grading scale"
+          }
+        }
+      }
+    },
+    "/api/gradebook/course/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get gradebook for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course gradebook"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getStudentGradebooksFormatted": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get student gradebooks in formatted view",
+        "responses": {
+          "200": {
+            "description": "Formatted gradebooks"
+          }
+        }
+      }
+    },
+    "/api/gradebook/course-analytics/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get course analytics for student",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course analytics"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getGradebooksOfCourseFormatted/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get formatted gradebooks for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Formatted course gradebooks"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getGradebooksOfStudentCourseFormatted/{studentId}/{courseId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get formatted gradebook for a student in a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "studentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Formatted student-course gradebook"
+          }
+        }
+      }
+    },
+    "/api/gradebook/getTeacherStudentAnalytics/{courseId}/{studentId}": {
+      "get": {
+        "tags": [
+          "Gradebook"
+        ],
+        "summary": "Get teacher view of student analytics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "studentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Student analytics"
+          }
+        }
+      }
+    },
+    "/api/message/create/{conversationId}": {
+      "post": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Create a message in a conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message created"
+          }
+        }
+      }
+    },
+    "/api/message/get/{conversationId}": {
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Get messages for a conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation messages"
+          }
+        }
+      }
+    },
+    "/api/message/markAsRead/{conversationId}": {
+      "post": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Mark messages as read in a conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages marked as read"
+          }
+        }
+      }
+    },
+    "/api/message/getUnreadCount": {
+      "get": {
+        "tags": [
+          "Message"
+        ],
+        "summary": "Get unread message counts for current user",
+        "responses": {
+          "200": {
+            "description": "Unread counts"
+          }
+        }
+      }
+    },
+    "/api/notifications/get": {
+      "get": {
+        "tags": [
+          "Notification"
+        ],
+        "summary": "Get current user's notifications",
+        "responses": {
+          "200": {
+            "description": "Notifications list"
+          }
+        }
+      }
+    },
+    "/api/notifications/mark-all": {
+      "put": {
+        "tags": [
+          "Notification"
+        ],
+        "summary": "Mark all notifications as read",
+        "responses": {
+          "200": {
+            "description": "All notifications marked as read"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}": {
+      "put": {
+        "tags": [
+          "Notification"
+        ],
+        "summary": "Mark a single notification as read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read"
+          }
+        }
+      }
+    },
+    "/api/posts": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Create a post (with assets)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assets": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Post created"
+          }
+        }
+      }
+    },
+    "/api/posts/getPosts": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Get posts for current user feed",
+        "responses": {
+          "200": {
+            "description": "Posts list"
+          }
+        }
+      }
+    },
+    "/api/posts/specificUserPosts/{id}": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Get posts by a specific user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User posts"
+          }
+        }
+      }
+    },
+    "/api/posts/deletePost/{postId}": {
+      "delete": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Delete a post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post deleted"
+          }
+        }
+      }
+    },
+    "/api/post-comment/sendComment/{id}": {
+      "post": {
+        "tags": [
+          "Post Comment"
+        ],
+        "summary": "Send a comment on a post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Post ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comment": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment sent successfully"
+          }
+        }
+      }
+    },
+    "/api/post-comment/getPostComment/{id}": {
+      "get": {
+        "tags": [
+          "Post Comment"
+        ],
+        "summary": "Get comments for a post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Post ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments"
+          }
+        }
+      }
+    },
+    "/api/post-likes/like/{id}": {
+      "post": {
+        "tags": [
+          "Post Likes"
+        ],
+        "summary": "Like or unlike a post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Post ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like status toggled"
+          }
+        }
+      }
+    },
+    "/api/post-likes/isPostLiked/{id}": {
+      "get": {
+        "tags": [
+          "Post Likes"
+        ],
+        "summary": "Check if user has liked a post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Post ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like status"
+          }
+        }
+      }
+    },
+    "/api/purchase/courses/{id}": {
+      "post": {
+        "tags": [
+          "Purchase"
+        ],
+        "summary": "Purchase a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Course ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase successful"
+          }
+        }
+      }
+    },
+    "/api/purchase/courses": {
+      "get": {
+        "tags": [
+          "Purchase"
+        ],
+        "summary": "Get purchased courses for current user",
+        "responses": {
+          "200": {
+            "description": "List of purchased courses"
+          }
+        }
+      }
+    },
+    "/api/rating/create/{id}": {
+      "post": {
+        "tags": [
+          "Rating"
+        ],
+        "summary": "Create a rating for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Course ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rating": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Rating created"
+          }
+        }
+      }
+    },
+    "/api/rating/course/{id}": {
+      "get": {
+        "tags": [
+          "Rating"
+        ],
+        "summary": "Get aggregated rating for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course rating"
+          }
+        }
+      }
+    },
+    "/api/rating/isRated/{id}": {
+      "get": {
+        "tags": [
+          "Rating"
+        ],
+        "summary": "Check if current user rated the course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "isRated boolean"
+          }
+        }
+      }
+    },
+    "/api/standard-grading/get/{courseId}": {
+      "get": {
+        "tags": [
+          "Standard Grading"
+        ],
+        "summary": "Get standard grading scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard grading scale"
+          }
+        }
+      }
+    },
+    "/api/standard-grading/set/{courseId}": {
+      "post": {
+        "tags": [
+          "Standard Grading"
+        ],
+        "summary": "Set standard grading scale for a course",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "courseId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Standard grading scale set successfully"
+          }
+        }
+      }
+    },
+    "/api/stripe/create-checkout-session": {
+      "post": {
+        "tags": [
+          "Stripe"
+        ],
+        "summary": "Create a checkout session (web)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created"
+          }
+        }
+      }
+    },
+    "/api/stripe/create-checkout-session-mobile": {
+      "post": {
+        "tags": [
+          "Stripe"
+        ],
+        "summary": "Create a checkout session (mobile)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mobile checkout session created"
+          }
+        }
+      }
+    },
+    "/api/stripe/getPurchases": {
+      "get": {
+        "tags": [
+          "Stripe"
+        ],
+        "summary": "Get purchases for the current user",
+        "responses": {
+          "200": {
+            "description": "Purchases list"
+          }
+        }
+      }
+    },
+    "/api/stripe/cancelSubscriptionAtPeriodEnd": {
+      "post": {
+        "tags": [
+          "Stripe"
+        ],
+        "summary": "Cancel subscription at period end",
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled"
+          }
+        }
+      }
+    },
+    "/api/subcategory/create": {
+      "post": {
+        "tags": [
+          "SubCategory"
+        ],
+        "summary": "Create a subcategory (with image)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subcategory created"
+          }
+        }
+      }
+    },
+    "/api/subcategory/get": {
+      "get": {
+        "tags": [
+          "SubCategory"
+        ],
+        "summary": "Get subcategories",
+        "responses": {
+          "200": {
+            "description": "Subcategories list"
+          }
+        }
+      }
+    },
+    "/api/subcategory/delete/{id}": {
+      "delete": {
+        "tags": [
+          "SubCategory"
+        ],
+        "summary": "Delete a subcategory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategory deleted"
+          }
+        }
+      }
+    },
+    "/api/subcategory/update/{id}": {
+      "put": {
+        "tags": [
+          "SubCategory"
+        ],
+        "summary": "Update a subcategory (with image)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subcategory updated"
+          }
+        }
+      }
+    },
+    "/api/submission/submission/{assessmentId}": {
+      "post": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Submit an assessment (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Submission created successfully"
+          }
+        }
+      }
+    },
+    "/api/submission/submission/{submissionId}": {
+      "get": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Get submission by ID (requires enrollment)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submission details"
+          }
+        }
+      }
+    },
+    "/api/submission/submission_for_Teacher/{assessmentId}": {
+      "get": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Get all submissions for an assessment (teacher view)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of submissions"
+          }
+        }
+      }
+    },
+    "/api/submission/submissions/{studentId}": {
+      "get": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Get all submissions for a student",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "studentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of submissions"
+          }
+        }
+      }
+    },
+    "/api/submission/teacherGrading/{submissionId}": {
+      "put": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Grade a student submission (teacher)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grade": {
+                    "type": "number"
+                  },
+                  "feedback": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submission graded successfully"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/earnings": {
+      "get": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Get teacher's earnings",
+        "responses": {
+          "200": {
+            "description": "Teacher earnings details"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/transactions": {
+      "get": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Get teacher's transactions",
+        "responses": {
+          "200": {
+            "description": "List of transactions"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/teacher-payment-stats": {
+      "get": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Get teacher payment statistics",
+        "responses": {
+          "200": {
+            "description": "Payment statistics"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/withdraw": {
+      "post": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Request a withdrawal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Withdrawal requested successfully"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/admin/withdrawals": {
+      "get": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Get all withdrawal requests (admin)",
+        "responses": {
+          "200": {
+            "description": "List of withdrawals"
+          }
+        }
+      }
+    },
+    "/api/teacher-payment/admin/withdrawals/{id}/update-stripe-id": {
+      "put": {
+        "tags": [
+          "Teacher Payment"
+        ],
+        "summary": "Update Stripe ID for withdrawal (admin)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "stripeAccountId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stripe ID updated"
+          }
+        }
+      }
+    },
+    "/api/wishlist/wishlistdone": {
+      "post": {
+        "tags": [
+          "Wishlist"
+        ],
+        "summary": "Add or toggle wishlist item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wishlist updated"
+          }
+        }
+      }
+    },
+    "/api/wishlist/wishlist": {
+      "get": {
+        "tags": [
+          "Wishlist"
+        ],
+        "summary": "Get wishlist for current user",
+        "responses": {
+          "200": {
+            "description": "Wishlist items"
+          }
+        }
+      }
+    }
+  },
+  "responses": {
+    "200": {
+      "description": "Chapters list for quarter"
+    }
+  },
+  "tags": []
+}
